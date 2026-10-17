@@ -1,0 +1,8 @@
+# Firmware payloads and vendor updater/source containers are fetched locally
+# for analysis and must not be published with the protocol documentation.
+.DS_Store
+/firmware/*.bin
+/firmware/*.hex
+*.apk
+*.exe
+*.xapk
