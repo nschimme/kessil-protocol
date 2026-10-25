@@ -88,7 +88,7 @@ Classification: **hardware observation** on one WiFi Dongle (firmware 1.5.13) an
 | Item | Result | Basis |
 |---|---|---|
 | Pins carrying data | The USB-C **D+** and **D-** pins of the fixture's K-Link port | Signal activity on both pins, probed at the fixture's second (daisy-chain) K-Link port while the Dongle sat on the first port |
-| Signaling | **Differential**: D+ idles high, D- idles low, and both toggle with matching timing | Idle levels read as complementary; thousands of edges per minute on each pin while the Dongle talked |
+| Signaling | **Differential**: D+ idles high, D- idles low, and D- is the exact complement of D+ | Idle levels read as complementary, and D- decoded to the same frames as D+ with inverted polarity (idle low) and zero framing errors |
 | Framing | **8N1 serial at 115200 baud**; normal polarity on D+ (idle high, start bit low) | Raw pulse widths were integer multiples of 8.68 microseconds; decoding D+ alone gave about 1000 bytes with zero framing errors and about 90 valid frames |
 | Duplex | **Half-duplex**: the Dongle's request and the fixture's reply appear on the same pair | A request and its reply (for example an identity query and the `A9 06 00 00 1C 02 01 DB 5C` reply) were both decoded from the same pin |
 | Dongle firmware | Opens a serial device at `B115200`; raises a GPIO roughly 100 microseconds before each write and lowers it afterward; ships a test tool named `testRS485` that builds the unmute frame the same way | **Static analysis** of Dongle 1.5.13 |
@@ -100,11 +100,23 @@ Not established: termination and bias, the voltage swing (the data pins were rea
 
 ### Periodic traffic observed from the Dongle
 
-- **Group channel writes** (command `1F`) about once per second per active group, carrying the interpolated schedule value. Consecutive frames were `A9 0B 00 00 1F 5D 2C 00 00 00 02 00 4B 5C` and `A9 0B 00 00 1F 5E 2C 00 00 00 02 00 4A 5C`: GID 2, UI1 93 then 94, UI2 44.
-- **Interpolation check:** with a program whose adjacent points were 09:00 (UI1 51, UI2 12) and 11:00 (UI1 102, UI2 51), captures at about 10:40 carried UI1 93 then 94 and UI2 44. That matches linear interpolation between the points with truncation. The per-point `duration` value (30 in that program) did not produce a separate ramp window in this segment.
-- **A payload-less command `34`** (`A9 04 00 00 34 C8 5C`) about once per second. Its purpose is unknown, and no reply to it was captured.
+With no other client talking to it, a 98-second capture showed **exactly two frames, each once per second**, and nothing else. No fixture replied to either.
+
+- **A payload-less command `34`** (`A9 04 00 00 34 C8 5C`), then, roughly 0.02 to 0.13 s later (timing measured through a WiFi log, so approximate), the group write below.
+- **Group channel write** (command `1F`) for each active group, carrying the interpolated schedule value. Consecutive frames were `A9 0B 00 00 1F 5D 2C 00 00 00 02 00 4B 5C` and `A9 0B 00 00 1F 5E 2C 00 00 00 02 00 4A 5C`: GID 2, UI1 93 then 94, UI2 44.
+- **Interpolation check:** with a program whose adjacent points were 09:00 (UI1 51, UI2 12) and 11:00 (UI1 102, UI2 51), captures at about 10:40 carried UI1 93 then 94 and UI2 44. That matches linear interpolation between the points with truncation (a true value of 93.78 was sent as 93). The per-point `duration` value (30 in that program) did not produce a separate ramp window in this segment.
 
 Whether the fixtures hold their last `1F` level without these repeats was not tested here.
+
+### Command `34`: the Dongle's check for another controller
+
+Classification: **static analysis** of Dongle 1.5.13, plus the hardware observation above that it sends the frame once per second.
+
+- A dedicated thread (`ctrlx_handler`, log text "running withCtrlX thread") builds the frame with a function named `WithCtrlX`: `A9`, length byte `04`, two zero bytes, command `34`, checksum, `5C`. It sends it through the normal UART write path about once per second.
+- It then inspects what came back. A reply counts only if it is at least 7 bytes with a length byte of 4, command `34` and terminator `5C` (the same shape as the request). Each valid reply increments a shared counter (capped at 3); each invalid or missing reply decrements it (floored at 0).
+- While the counter is above zero, the JSON handlers for `dtype:0` (scan), `dtype:5` (info refresh) and `dtype:114` (system info) skip their normal work and answer `{"msg": "Caution! Collision!","code":-2, "dType":N}` instead, with `N` echoing the request.
+
+So `34` is a once-per-second probe for another controller on the bus, and "Collision" is the Dongle's reaction to hearing an answer. The function name suggests the Spectral Controller X is the intended answerer, which would fit Kessil's instruction not to connect a Dongle and a Controller X together; no capture of a Controller X answering was made. In the capture the Dongle kept answering `dtype:114` normally while sending `34`, so its own transmissions were not being counted as answers.
 
 ## Dongle-to-light K-Link UART frames
 
@@ -153,6 +165,7 @@ The AP9X library has functions explicitly named `klink_read_fw_version_port_I` a
 | `27` / `28` | Set: KID plus two GID bytes; Get: KID | Set / read AP9X dual-group identifiers |
 | `33` | KID, 32-bit big-endian, plus one control byte | AP9X `klink_keypad_ctrl`; `lamp_sync_ui_from_st` uses value `00`. Exact control meaning and Dongle support are unverified. |
 | `2B` | KID, 32-bit big-endian, plus one selector byte | AP9X `klink_find_me` variant; selector is forwarded from app request field `SIDE`; supported values and fixture-level meaning unresolved |
+| `34` | none | Dongle "WithCtrlX" probe sent about once per second; a matching 7-byte `34` reply makes the Dongle answer scans and info queries with a collision error. No reply was seen from fixtures. |
 | `35` | KID, 32-bit big-endian | Dongle `getInfo` sends this request and stores successful reply byte 5 as `1` only for `06` (otherwise `0`); query failure is stored as `-1`. AP9X `libk-link.so`'s unreferenced `klink_get_status` wrapper instead maps both `06` and `80` to `1`. Dongle does not serialize its stored result in the inspected JSON responses; the status meaning is unknown. |
 | `36` | KID, 32-bit big-endian | AP9X library `klink_read_status` variant; sends the request but discards the response and returns `0`, so no status value is exposed by this wrapper. Daemon use is unverified. |
 | `92` | one byte | AP9X `klink_12_chan_and_fan` diagnostic: sends value `01` in its check path and logs fourteen reply bytes; field meanings and Dongle support are unverified |

@@ -223,6 +223,8 @@ These branches are statically recovered from Dongle 1.5.13's `dispatch_cmd` and 
 
 The `dtype:3` and `dtype:4` handlers are not atomic across saved configuration and K-Link transmission. They persist group state before calling `WriteData`; `dtype:4` also updates the in-memory KID-to-GID record before its bus write. If `WriteData` returns an error, the handler reports failure but does not restore the already-persisted group state or the updated lamp record in that path. A nonzero response therefore does not prove that no configuration changed; inspect `dtype:102` and cached `dtype:114` state before deciding whether a retry is needed. A live `dtype:1`/`5` check may trigger additional assignment writes.
 
+**Collision response (static analysis, Dongle 1.5.13).** When the Dongle's Controller X probe (K-Link command `34`, see [K-Link protocol](klink-protocol.md#command-34-the-dongles-check-for-another-controller)) has recently seen a valid answer, `dtype:0`, `dtype:5` and `dtype:114` return `{"msg": "Caution! Collision!","code":-2, "dType":N}` (N is the request's `dtype`) instead of their normal reply. This was not triggered on hardware, because nothing on the tested chain answers `34`.
+
 The `dtype:102` request takes `data.GID` and returns the same single group-state object in a `group` field (`msg`, `code`, and `dType` are also returned). It is useful to read back persisted manual values and group configuration independently of issuing a control write. Like the `dtype:3` response's `group.UI`, these are saved group values, not a sensor measurement of the fixture's emitted channels.
 
 Retries, wait intervals, and callbacks are client queue behavior, not JSON fields. The field schemas come from explicit Gson object construction in the app builder.
