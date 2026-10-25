@@ -178,7 +178,7 @@ The Dongle's `getInfo(KID)` routine uses a KID-selection window to associate rep
 **Hardware observation (Dongle 1.5.13 in router/station mode, two A360X Tuna Sun fixtures running FW 1.3 in one group; identifiers below are synthetic): fixture mute state, and what the raw tunnel puts on the wire.**
 
 - **`1C` and mute state.** Raw `1C` queries returned the tunnel's `FAILED` text within about 30 ms for fixtures the Dongle had muted, even though JSON `dtype:102`/`dtype:114` succeeded and the fixtures were powered. A bus capture showed those query frames were transmitted complete and valid and that no fixture answered. For a fixture with KID 18001234, sending unmute `A9 08 00 00 1A 01 12 AD 52 CC 5C` (acknowledged by nothing on the bus; the tunnel itself replied `FAILED`), then `A9 08 00 00 1C 01 12 AD 52 CA 5C`, returned `A9 06 00 00 1C 02 01 DB 5C`, which parses as GID 2, type 2 and matched the cached inventory. Mute `A9 08 00 00 19 01 12 AD 52 CD 5C` then returned `A9 05 00 00 19 FF E3 5C`, and a repeated `1C` was silent again. A fast `FAILED` on `1C` therefore does not show that a fixture is absent; it may only be muted. Raw group channel writes (`1F`) took effect on the muted fixtures.
-- **`18` range queries: the earlier "muted fixtures ignore `18`" reading is not supported.** A bus capture showed the raw tunnel transmitted each `18` frame **14 bytes long, without its final `5C`**: the request sent to the tunnel was `A9 0C 00 00 18 <lo, 4 bytes> <hi+1, 4 bytes> <checksum> 5C` (15 bytes), and the wire carried the same bytes minus the terminator (the four captured frames had range bounds equal to the ones requested). Frames of 7, 8, 11 and 14 bytes from the same tunnel were not truncated. The cause was not established. Because the frame was malformed on the wire, silence from the fixtures cannot be attributed to muting. Whether a well-formed `18` is answered, by muted or unmuted fixtures, is untested.
+- **`18` range queries.** A UART-level capture (no symbol limit) showed the raw tunnel transmits each `18` range query complete: for example `A9 0C 00 00 18 01 21 EA C0 01 23 71 61 1A 5C`, the requested bounds followed by the checksum and `5C`, 15 bytes. No fixture answered while the fixtures were muted, so muted fixtures stay silent on `18` as they do on `1C`. Whether an **unmuted** fixture answers a well-formed `18`, and what its reply looks like, has not been captured. (A pulse-width capture of the same traffic briefly suggested the frames were missing their final byte; that was an artifact of a capture-buffer limit, revealed by a checksum mismatch in the decoded bytes, and was wrong.)
 
 Classification: observed on hardware; the meaning of the `19` reply byte `FF` is not established.
 
@@ -193,7 +193,7 @@ From a 35-second capture in which an operator issued unmute, identity-query and 
 | Mute one KID (`19`, 11 bytes) | 5 | 5 acknowledgements, 8 bytes: `A9 05 00 00 19 FF E3 5C` |
 | Group channel write (`1F`, 14 bytes) | 34 | none |
 | Controller probe (`34`, 7 bytes) | 34 | none |
-| Range query (`18`, sent without its `5C`) | 4 | none |
+| Range query (`18`, 15 bytes) | 4 | none (fixtures muted) |
 
 This agrees with the Dongle's read-back whitelist (`19` and `1C` are read back, `1A`, `1F` and `34` are not). The group write payload layout is confirmed by the captures: five channel bytes, the GID, then a zero byte (for example `5D 2C 00 00 00 02 00` for UI1 93, UI2 44, UI3 to UI5 zero, GID 2).
 
