@@ -72,6 +72,13 @@ Then write that GID's five channel slots (replace the example values with values
 {"dtype":3,"data":{"GID":<exclusive-GID>,"UI1":<0-255>,"UI2":<0-255>,"UI3":<0-100>,"UI4":<0-100>,"UI5":<0-100>,"save":1,"enabled":1}}
 ```
 
+**Hardware observations (Dongle 1.5.13 in router/station mode, two Tuna Sun fixtures in one type-2 group, GID 2).** Classification: observed on hardware, one device.
+
+- UDP port 8888 `POLO` discovery got no reply on the tested LAN (unicast and subnet broadcast), while TCP 8888 accepted `dtype:102` and `dtype:114`. Finding the Dongle by scanning for TCP 8888 worked.
+- `{"dtype":3,"data":{"GID":2,"UI1":40,"UI2":40,"UI3":0,"UI4":0,"UI5":0,"save":0,"enabled":1}}` returned `code:0` and a `group` object, and both fixtures visibly dimmed together; writing 127/127 restored them. With `save:0` the reply and a following `dtype:102` still showed the stored `UI` `[127,127,0,0,0]`, so the reply does not echo the live values. The write worked while the Dongle had the fixtures muted.
+- A `save:1` write of the same values changed the group's `pid` from 1 to -1 and left `UI` unchanged. `{"dtype":100,"data":{"GID":2,"PID":1}}` set `pid` back to 1, after which `dtype:102` matched its earlier state exactly.
+- Raw `1F` with GID 2 (`A9 0B 00 00 1F 28 28 00 00 00 02 00 84 5C`) also dimmed both fixtures together. The tunnel answered `FAILED`, the expected no-readback reply, and `dtype:102` did not change.
+
 `save:1` stores the group values and `enabled:1` requests the live K-Link write. These commands address the GID, not the KID, so every lamp still assigned to that GID receives the same group write. The cached-inventory/setup sequence and message shapes are code-derived; group availability, app/device timing, acknowledgements, and the resulting light output have not been validated in a live exchange. Do not use this as a fixture-independent write until inventory confirms the target is alone in the selected group.
 
 ## AP9X support for individual light control
