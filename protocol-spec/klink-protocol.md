@@ -98,6 +98,27 @@ Interpretation: this is an RS-485-style differential pair on D+/D-, driven throu
 
 Not established: termination and bias, the voltage swing (the data pins were read as 3.3 V logic by a microcontroller input; the line voltage was not measured), whether the CC and SBU pins carry anything, the electrical limit on fixtures per chain, and whether a controller that drives the pair from two ordinary GPIO pins (without a transceiver) works. The measurement used a microcontroller recording pulse widths on a USB data pin through its RMT peripheral; no logic analyzer was used.
 
+### Fixture replies to queries, from a bus capture
+
+Classification: **hardware observation** (one Dongle, two A360X Tuna Sun fixtures, FW 1.3; KIDs below are synthetic and their frames recomputed). A node on the bus recorded the frames while an operator unmuted one fixture and sent queries through the Dongle's tunnel, then muted it again. Fixtures answer only while unmuted, so the sequence is unmute, query, mute.
+
+| Request (bytes) | Reply from an unmuted fixture |
+|---|---|
+| `08`, firmware version, no payload: `A9 04 00 00 08 F4 5C` | `A9 06 00 00 08 01 03 EE 5C`: payload `01 03` is version 1.3, matching the Dongle's cached lamp firmware |
+| `20`, model, no payload: `A9 04 00 00 20 DC 5C` | 22 bytes: payload is a NUL-terminated ASCII model string, here `A360X Tuna Sun`, then checksum `8D` and `5C` |
+| `35`, status, KID: `A9 08 00 00 35 01 12 AD 52 B1 5C` | `A9 0B 00 00 35 01 01 01 02 03 05 03 B0 5C`: seven payload bytes whose meaning is **unknown**. The first (`01`) is the byte the Dongle's `getInfo` stores as a status flag only when it equals `06`; the rest are unexplained |
+| `18` range containing exactly one unmuted KID: `A9 0C 00 00 18 01 12 AD 52 01 12 AD 53 B7 5C` | `A9 08 00 00 18 01 12 AD 52 CE 5C`: the fixture's KID, 11 bytes |
+| `18` range containing no unmuted KID | silence |
+| `18` range containing one unmuted and one muted KID | only the unmuted fixture answers, with its own KID |
+| `18` range or `08` with two fixtures unmuted | both answer at once: overlapping bytes, no valid frame |
+| `19 FFFFFFFF` (mute all) with two fixtures | the two acknowledgements overlap and are garbled, so a broadcast mute's acknowledgement is not usable |
+| `1C` (identity) for an unmuted KID | `A9 06 00 00 1C 02 01 DB 5C` (GID 2, type 2) |
+| any of the above for a muted fixture | silence |
+
+`08` and `20` carry no KID, so every unmuted fixture answers them; that is why the Dongle's `getInfo` unmutes exactly one fixture first. An overlap of replies is how a range query with several responders appears, which is what the binary-search discovery relies on.
+
+**Caution when studying the protocol through the Dongle's TCP tunnel.** For the `08`, `20` and `35` replies, the tunnel's TCP response contained a zero byte at one position where the bus frame had a nonzero byte (the model string came back with `00` in place of `36`, and the checksum failed to validate in the tunnel's copy; on the bus every checksum was valid). The `1C`, `18` and `19` replies matched the bus exactly. Use a bus capture, not the tunnel's reply bytes, as ground truth. The cause was not established.
+
 ### Periodic traffic observed from the Dongle
 
 With no other client talking to it, a 98-second capture showed **exactly two frames, each once per second**, and nothing else. No fixture replied to either.
