@@ -50,6 +50,10 @@ For direct control without reproducing the Kessil app, the simplest architecture
 
 The frame formats are in [K-Link protocol](klink-protocol.md), and network request shapes are in [WiFi Dongle API](wifi-dongle-api.md). Electrical adapters, transport drivers, and runnable control tools are outside this publication.
 
+### Physical interface for a direct controller
+
+The [physical-layer observations](klink-protocol.md#physical-layer-differential-half-duplex-serial-on-the-usb-c-data-pins) show 115200 baud 8N1 serial on the USB-C D+/D- pins, differential and half-duplex. A direct controller therefore needs an RS-485-class transceiver (3.3 V logic) between a microcontroller UART and the port, with the transceiver's direction pin driven around each transmission, plus 5 V from the port if the controller is powered from it. Connect D+ to the transceiver's non-inverting input so that its receive output idles high. The Dongle repeats group writes about once per second; a replacement should do the same until it is shown that fixtures hold a level without repeats.
+
 ## Neptune Apex / IoTa endpoint
 
 Treat Apex compatibility as a separate service surface alongside TCP/8888. The analyzed Dongle starts TCP and UDP listeners on port `26977` when Apex mode is enabled (`dtype:210`); its UDP endpoint handles IoTa discovery/time-related messages, and its TCP endpoint accepts encrypted IOTA JSON. A replacement can expose these listeners to the Apex while translating supported light operations to K-Link. The [Apex/IoTa reference](apex-iota-protocol.md#dongle-apex-tcp-encrypted-iota-json) summarizes transport differences, but omits cipher constants and handshake reconstruction. It does not provide a complete Dongle-compatible encrypted endpoint specification; live validation is still required.

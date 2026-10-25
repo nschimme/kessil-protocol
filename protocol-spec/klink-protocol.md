@@ -81,6 +81,31 @@ The firmware-derived AP9X discovery request is a UDP broadcast to port `19276` w
 
 The legacy Dongle UDP service receives a short text datagram on port `8888` and returns `POLO`; it does not route that probe through the JSON/K-Link handlers. Broadcast discovery reaches only the local broadcast domain and may be filtered. Earlier LAN probes produced no replies, leaving discovery unvalidated. Cached inventory uses a separate TCP `dtype:114` request.
 
+## Physical layer: differential half-duplex serial on the USB-C data pins
+
+Classification: **hardware observation** on one WiFi Dongle (firmware 1.5.13) and two A360X Tuna Sun fixtures chained with a USB-C cable, except rows marked **static analysis**. Single device set; not replicated on other models or fixture counts.
+
+| Item | Result | Basis |
+|---|---|---|
+| Pins carrying data | The USB-C **D+** and **D-** pins of the fixture's K-Link port | Signal activity on both pins, probed at the fixture's second (daisy-chain) K-Link port while the Dongle sat on the first port |
+| Signaling | **Differential**: D+ idles high, D- idles low, and both toggle with matching timing | Idle levels read as complementary; thousands of edges per minute on each pin while the Dongle talked |
+| Framing | **8N1 serial at 115200 baud**; normal polarity on D+ (idle high, start bit low) | Raw pulse widths were integer multiples of 8.68 microseconds; decoding D+ alone gave about 1000 bytes with zero framing errors and about 90 valid frames |
+| Duplex | **Half-duplex**: the Dongle's request and the fixture's reply appear on the same pair | A request and its reply (for example an identity query and the `A9 06 00 00 1C 02 01 DB 5C` reply) were both decoded from the same pin |
+| Dongle firmware | Opens a serial device at `B115200`; raises a GPIO roughly 100 microseconds before each write and lowers it afterward; ships a test tool named `testRS485` that builds the unmute frame the same way | **Static analysis** of Dongle 1.5.13 |
+| Power | The fixture supplies 5 V to the Dongle through the same port | Dongle rated 5 V DC, 400 mA; the Dongle boots from a 5 V source alone |
+
+Interpretation: this is an RS-485-style differential pair on D+/D-, driven through a transceiver whose direction pin the Dongle's GPIO controls. D+ behaves as the non-inverting leg: a receiver whose non-inverting input is wired to D+ idles with its output high. Reading D+ alone, single-ended, was enough to decode every frame.
+
+Not established: termination and bias, the voltage swing (the data pins were read as 3.3 V logic by a microcontroller input; the line voltage was not measured), whether the CC and SBU pins carry anything, the electrical limit on fixtures per chain, and whether a controller that drives the pair from two ordinary GPIO pins (without a transceiver) works. The measurement used a microcontroller recording pulse widths on a USB data pin through its RMT peripheral; no logic analyzer was used.
+
+### Periodic traffic observed from the Dongle
+
+- **Group channel writes** (command `1F`) about once per second per active group, carrying the interpolated schedule value. Consecutive frames were `A9 0B 00 00 1F 5D 2C 00 00 00 02 00 4B 5C` and `A9 0B 00 00 1F 5E 2C 00 00 00 02 00 4A 5C`: GID 2, UI1 93 then 94, UI2 44.
+- **Interpolation check:** with a program whose adjacent points were 09:00 (UI1 51, UI2 12) and 11:00 (UI1 102, UI2 51), captures at about 10:40 carried UI1 93 then 94 and UI2 44. That matches linear interpolation between the points with truncation. The per-point `duration` value (30 in that program) did not produce a separate ramp window in this segment.
+- **A payload-less command `34`** (`A9 04 00 00 34 C8 5C`) about once per second. Its purpose is unknown, and no reply to it was captured.
+
+Whether the fixtures hold their last `1F` level without these repeats was not tested here.
+
 ## Dongle-to-light K-Link UART frames
 
 The Dongle firmware constructs K-Link UART requests directly. Its `WriteData` routine serializes access to the UART, toggles a GPIO around transmission, and validates replies as framed packets. This gives an exact frame format for the Dongle's K-Link side; it should not be conflated with the Controller X firmware's separate receive parser, which recognizes `D7`.

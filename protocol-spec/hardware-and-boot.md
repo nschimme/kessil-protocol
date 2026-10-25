@@ -48,3 +48,16 @@ For this project, call boot authenticated only when we can show a trust anchor a
 5. Inspect both updater and device-side acceptance paths. A client-side MD5 check can be bypassed unless the device enforces authenticated-image verification.
 
 Current answer: **we have not found evidence that any analyzed Kessil target enforces cryptographic secure boot.** The inspected update artifacts expose CRC/MD5 checks or no file-level signature check. This is evidence-bounded; it does not establish undisclosed ROM behavior, production fuse settings, or firmware versions outside this corpus.
+
+## WiFi Dongle board, from public sources and firmware
+
+Classification: the board details are from the public FCC internal-photos exhibit for FCC ID `2ASL8-WIFIKLINK` (grantee DiCon FiberOptics, granted 2019-05-24, model KSAWD01); the serial-port details are **static analysis** of Dongle 1.5.13. The schematic and block diagram in the filing are under long-term confidentiality and are not public.
+
+| Item | What is known |
+|---|---|
+| Module | Acsip AI7688H (FCC ID `2ADWC-AI7688H`) carrying a MediaTek MT7688AN, a Winbond 25Q256JVEQ SPI flash and a Winbond W971GG6SB DDR2 part |
+| Carrier board | The USB-C plug is soldered to the carrier's edge; a populated two-row connector (J3) and test points (TP1, TP2) sit on the underside, with silkscreen reading `FOUT/INT1` near J3; an unpopulated coin-cell footprint; two small ICs and a crystal that were not identified |
+| Power | Rated 5 V DC, 400 mA; the RF test report configures the Dongle as powered from the host fixture |
+| Serial link to the fixtures | The Dongle's service opens a serial device at 115200 baud and drives a GPIO high shortly before each write and low afterward; the root filesystem also contains a vendor test tool named `testRS485` using the same recipe |
+
+The public exhibits do not say which signals reach J3. The public RF test report contains no data-interface information.
