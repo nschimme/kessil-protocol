@@ -119,7 +119,7 @@ The firmware contains response templates keyed by `dType`. For most IDs, only th
 | 213 | Query Apex mode | APK command enum labels this `cmd_get_apex_mode` |
 | 300–301 | UDP broadcast / reply | APK enum names these `cmd_udp_broadcast` and `cmd_reply_udp_broadcast`. The receive worker validates `dtype:301`; `dtype:300` is present in the enum, but no request builder or call site was recovered in the supplied DEX files. |
 
-Lamp records include `KID`, `GID`, `rGID`, `lGID`, `model`, `FW`, `type`, and `timestamp`. Program point records expose `minutes`, a five-value `UI` array, `eid`, `duration`, and `freq`. The firmware also names light parser/dump routines for Get, Color, Set, Flash, Status, Fallback, and Capability, and identifies five UI channels. These names strongly indicate the shape of the light-control model but do not, by themselves, establish the exact command field mapping or channel order for every model.
+Lamp records include `KID`, `GID`, `rGID`, `lGID`, `model`, `FW`, `type`, and `timestamp`. Program point records expose `minutes`, a five-value `UI` array, `eid`, `duration`, and `freq`. In the Dongle's stock programs every point has `eid` -1, `duration` 30 and `freq` 1; `duration` is an effect length, not a ramp time (see [Effects](klink-protocol.md#effects)). The firmware also names light parser/dump routines for Get, Color, Set, Flash, Status, Fallback, and Capability, and identifies five UI channels. These names strongly indicate the shape of the light-control model but do not, by themselves, establish the exact command field mapping or channel order for every model.
 
 In the checksum-mismatched v1.4 catalog candidate, the explicit `dType:209` branch formats a success reply shaped like `{"msg":"success","code":0,"dType":209,"UID":"<value>","timestamp":<milliseconds>}`, with the timestamp supplied by `current_timestamp()`. This adds a response-side detail to the APK enum's `cmd_config_generation` label, but the request fields and `UID` meaning were not recovered. Treat it as candidate-only comparative evidence, not as a verified behavior of the catalog's advertised image.
 
@@ -134,7 +134,7 @@ For payload-bearing commands, the APK builds an object containing an integer `dt
 | `function.b::f` | `KID`; for lamp type 0, also `SIDE` | Find/identify lamp (`cmd_find_me`) | 2 |
 | `function.b::i` | `GID` (integer), `UI1`…`UI5` (integers), `save` (integer); conditionally `enabled` (integer, one traced caller passes `0`) | Set five manual UI/channel values (`cmd_set_knob`) | 3 |
 | `function.b::w` | `KID` (string), `GID` (integer) | Assign lamp to group (`cmd_set_group`) | 4 |
-| `function.b::n` | `GID`, `EID`, `FREQ`, `duration` | Run effect (`cmd_run_effect`) | 101 |
+| `function.b::n` | `GID`, `EID`, `FREQ`, `duration` | Run effect (`cmd_run_effect`); `duration` is in seconds, `EID` -1 stops it, and it only produces output on a paused group with no program (see [Effects](klink-protocol.md#effects)) | 101 |
 | `function.b::o` / `p` | `GID`, `PID` | Run program (`cmd_run_program`) | 100 |
 | `function.b::g` | `GID` | Get groups (`cmd_get_groups`) | 102 |
 | `function.b::b` | `GID`, `name`, `type` | Create group (`cmd_create_group`) | 103 |
@@ -147,7 +147,7 @@ For payload-bearing commands, the APK builds an object containing an integer `dt
 | `function.b::z` / `A` / `B` / `C` | `GID` plus lunar settings (`end`, `begin`, `high`, `phase`, `color`, `enabled`, or `reset`) | Set lunar mode (`cmd_set_lunar`) | 112 |
 | `function.b::h` | `GID`, `pause` | Pause/resume group program (`cmd_pause_group`) | 113 |
 | `function.b::y` | empty object | Get Dongle/system info (`cmd_get_system_info`) | 114 |
-| `function.b::e` | `enabled` | Set demo mode (`cmd_demo_mode`) | 115 |
+| `function.b::e` | `enabled` | Set demo mode (`cmd_demo_mode`); observed to toggle the `demo` flag in `dtype:114`, and turning it off restores the group's saved program and `startDate`; effects do not require it; turning it off also made the Dongle send a `1B` SetGid frame per lamp (see [Effects](klink-protocol.md#effects)) | 115 |
 | `function.b::D` | `siblings` | Set sibling Dongles (`cmd_set_siblings`) | 116 |
 | `function.b::E` / `function.g::H` | `timestamp` (decimal string), `timezone` (string) | Set time (`cmd_set_datetime`); firmware invokes `/bin/time_change` | 202 |
 | `function.b::a` / `x` | `enabled`; `a` also has `host` | Start FTP (`cmd_start_ftp`) | 205 |
