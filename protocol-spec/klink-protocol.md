@@ -178,7 +178,7 @@ The AP9X library has functions explicitly named `klink_read_fw_version_port_I` a
 | `08` | none | Read lamp firmware version; `getInfo` selects the responding lamp by unmuting its KID first |
 | `0C` | KID, 32-bit big-endian | AP9X library read: returns five one-byte input/UI values for a KID; `lamp_sync_ui_from_st` stores them in the group's five manual UI slots. Dongle 1.5.13's raw tunnel can forward the request frame, but its UART readback whitelist excludes command `0C`; it therefore returns `FAILED` instead of exposing any fixture reply. |
 | `11` | five channel bytes, one type byte | AP9X `klink_set_input_by_type` control builder; AP9X manual-mode writer uses type `00`; other values and their semantics are unresolved |
-| `17` | KID, 32-bit big-endian | Find/identify a light |
+| `17` | KID, 32-bit big-endian | Find/identify a light. **Hardware observation (two A360X Tuna Sun fixtures, FW 1.3, one group, KIDs synthetic):** the addressed fixture reacts with a short dip in intensity (about half a second) that resumes by itself, but only when a controller probe (`34`) was heard shortly before; a bare `17` did nothing in repeated trials, and a probe followed about 300 ms later by `17` worked every time, for each fixture separately. The Dongle sends `34` about once a second, so its find-me always works. No reply frame was seen. Unmuting first made no difference. |
 | `18` | lower and upper KID bounds, each 32-bit big-endian | Branch/range query for lamp discovery |
 | `19` / `1A` | KID, 32-bit big-endian | Mute / unmute one KID; `FFFFFFFF` is used for all lamps |
 | `1B` | KID (32-bit big-endian), GID (one byte) | Assign lamp to group |
@@ -190,7 +190,7 @@ The AP9X library has functions explicitly named `klink_read_fw_version_port_I` a
 | `27` / `28` | Set: KID plus two GID bytes; Get: KID | Set / read AP9X dual-group identifiers |
 | `33` | KID, 32-bit big-endian, plus one control byte | AP9X `klink_keypad_ctrl`; `lamp_sync_ui_from_st` uses value `00`. Exact control meaning and Dongle support are unverified. |
 | `2B` | KID, 32-bit big-endian, plus one selector byte | AP9X `klink_find_me` variant; selector is forwarded from app request field `SIDE`; supported values and fixture-level meaning unresolved |
-| `34` | none | Dongle "WithCtrlX" probe sent about once per second; a matching 7-byte `34` reply makes the Dongle answer scans and info queries with a collision error. No reply was seen from fixtures. |
+| `34` | none | Dongle "WithCtrlX" probe sent about once per second (also what makes fixtures answer `17` find; see that row); a matching 7-byte `34` reply makes the Dongle answer scans and info queries with a collision error. No reply was seen from fixtures. |
 | `35` | KID, 32-bit big-endian | Dongle `getInfo` sends this request and stores successful reply byte 5 as `1` only for `06` (otherwise `0`); query failure is stored as `-1`. AP9X `libk-link.so`'s unreferenced `klink_get_status` wrapper instead maps both `06` and `80` to `1`. Dongle does not serialize its stored result in the inspected JSON responses; the status meaning is unknown. |
 | `36` | KID, 32-bit big-endian | AP9X library `klink_read_status` variant; sends the request but discards the response and returns `0`, so no status value is exposed by this wrapper. Daemon use is unverified. |
 | `92` | one byte | AP9X `klink_12_chan_and_fan` diagnostic: sends value `01` in its check path and logs fourteen reply bytes; field meanings and Dongle support are unverified |
