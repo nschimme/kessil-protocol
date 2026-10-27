@@ -11,6 +11,7 @@ The project documents functional behavior and protocol fields in independently w
 3. Capture one-light and daisy-chained fixture sessions to validate enumeration, identity fields, group assignment, and the effects of commands that may change saved group state.
 4. Validate the recovered Apex/IoTa message formats and transport behavior against an authorized, locally controlled device. Some fields and operations remain uncertain.
 5. Treat AP9XE and WiFi Dongle XE as a separate generation. Official setup material documents provisioning, but its control API, authentication, firmware, and update path remain uncharacterized.
+6. Capture a chain with an AP9X acting as master and a second controller (Spectral Controller X or a compatible replacement) sending the command-`34` presence beacon. The AP9X handover described in [K-Link protocol](klink-protocol.md#command-34-as-a-handover-beacon) has not been observed on a bus.
 
 ## Confidence and limitations
 

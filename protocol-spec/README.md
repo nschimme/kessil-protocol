@@ -14,7 +14,7 @@ flowchart LR
     Host[Computer] -->|Updater interface| Controller[Controller X or AP700]
 ```
 
-For the legacy light-control flow, `dtype:4` assigns a fixture KID to a group GID, while `dtype:3` writes channel values to a GID. A group write affects every fixture in that group, so individual control requires an exclusive group. The physical daisy-chain behavior has not been validated with a capture.
+For the legacy light-control flow, `dtype:4` assigns a fixture KID to a group GID, while `dtype:3` writes channel values to a GID. A group write affects every fixture in that group, so individual control requires an exclusive group. An AP9X is type 1, the same as a Tuna Blue, so it can share a type-1 group. Controllers also send a once-per-second K-Link command `34` presence beacon; an AP9X that is acting as chain master treats a competing beacon as a reason to hand control over. The physical daisy-chain behavior and the two-controller handover have not been validated with a capture.
 
 | Term | Meaning |
 |---|---|
@@ -31,6 +31,7 @@ For the legacy light-control flow, `dtype:4` assigns a fixture KID to a group GI
 | Legacy WiFi Dongle API | [WiFi Dongle API](wifi-dongle-api.md) |
 | Dongle/AP9X replacement design | [Replacement feasibility](dongle-replacement.md) |
 | Fixture-bus framing and addressing | [K-Link protocol](klink-protocol.md) |
+| Controller presence and AP9X handover | [Command 34](klink-protocol.md#command-34-as-a-handover-beacon) |
 | Neptune Apex / IoTa | [Apex / IoTa protocol](apex-iota-protocol.md) |
 | Firmware update interfaces | [Firmware update notes](firmware-update.md) |
 | Hardware and boot observations | [Hardware and boot notes](hardware-and-boot.md) |

@@ -143,6 +143,9 @@ Classification: **static analysis** of Dongle 1.5.13, plus the hardware observat
 
 So `34` is a once-per-second probe for another controller on the bus, and "Collision" is the Dongle's reaction to hearing an answer. The function name suggests the Spectral Controller X is the intended answerer, which would fit Kessil's instruction not to connect a Dongle and a Controller X together; no capture of a Controller X answering was made. In the capture the Dongle kept answering `dtype:114` normally while sending `34`, so its own transmissions were not being counted as answers.
 
+Controller X and the AP9X send the same frame, and an AP9X uses it as a handover signal. See
+[command `34` as a handover beacon](#command-34-as-a-handover-beacon).
+
 ## Dongle-to-light K-Link UART frames
 
 The Dongle firmware constructs K-Link UART requests directly. Its `WriteData` routine serializes access to the UART, toggles a GPIO around transmission, and validates replies as framed packets. This gives an exact frame format for the Dongle's K-Link side; it should not be conflated with the Controller X firmware's separate receive parser, which recognizes `D7`.
@@ -190,7 +193,7 @@ The AP9X library has functions explicitly named `klink_read_fw_version_port_I` a
 | `27` / `28` | Set: KID plus two GID bytes; Get: KID | Set / read AP9X dual-group identifiers |
 | `33` | KID, 32-bit big-endian, plus one control byte | AP9X `klink_keypad_ctrl`; `lamp_sync_ui_from_st` uses value `00`. Exact control meaning and Dongle support are unverified. |
 | `2B` | KID, 32-bit big-endian, plus one selector byte | AP9X `klink_find_me` variant; selector is forwarded from app request field `SIDE`; supported values and fixture-level meaning unresolved |
-| `34` | none | Dongle "WithCtrlX" probe sent about once per second (also what makes fixtures answer `17` find; see that row); a matching 7-byte `34` reply makes the Dongle answer scans and info queries with a collision error. No reply was seen from fixtures. |
+| `34` | none | Controller-presence beacon sent about once per second by the Dongle ("WithCtrlX"), Controller X and the AP9X (also what makes fixtures answer `17` find; see that row); a matching 7-byte `34` reply makes the Dongle answer scans and info queries with a collision error, while an AP9X treats a competing beacon as a handover signal (see [AP9X handover](#command-34-as-a-handover-beacon)). No reply was seen from fixtures. |
 | `35` | KID, 32-bit big-endian | Dongle `getInfo` sends this request and stores successful reply byte 5 as `1` only for `06` (otherwise `0`); query failure is stored as `-1`. AP9X `libk-link.so`'s unreferenced `klink_get_status` wrapper instead maps both `06` and `80` to `1`. Dongle does not serialize its stored result in the inspected JSON responses; the status meaning is unknown. |
 | `36` | KID, 32-bit big-endian | AP9X library `klink_read_status` variant; sends the request but discards the response and returns `0`, so no status value is exposed by this wrapper. Daemon use is unverified. |
 | `92` | one byte | AP9X `klink_12_chan_and_fan` diagnostic: sends value `01` in its check path and logs fourteen reply bytes; field meanings and Dongle support are unverified |
@@ -329,6 +332,36 @@ Kessil's current [AP9X user manual](https://kessil.com/downloads/AP9X/5870142_A8
 | Wi-Fi master connected; solid blue mode indicator | Master controls disabled; Wi-Fi remains on at the master | A Wi-Fi-controlled AP9X chain has one master and Wi-Fi-disabled slaves. |
 
 These are manual-described AP9X states, not a capture and not a wire-level relay proof. The Tuna Sun two-light topology below remains supported separately by the owner's report, the Dongle's KID/GID discovery and group-control implementation, and Kessil's A360X chain guidance.
+
+#### Command `34` as a handover beacon
+
+Status: **unverified.** No two-controller bus capture has been made.
+
+- **Spectral Controller X and the AP9X send the same frame** as the Dongle: the seven-byte
+  `A9 04 00 00 34 C8 5C`, about once per second.
+- **An AP9X acting as chain master yields to a competing beacon.** It reports another
+  controller as present while beacons keep arriving, and resumes as chain controller once they
+  have been absent for a few seconds. It also keeps a collision state that gates parts of its
+  scanning, matching the Dongle's "Caution! Collision!" behavior.
+- **A replacement controller can take over an AP9X chain** by announcing `34` about once per
+  second. The Dongle has no equivalent handover: it treats a `34` reply as a collision instead.
+  This asymmetry is consistent with Kessil's warning not to put two dedicated controllers on
+  one chain. Whether Controller X reacts to an incoming `34` is unresolved.
+
+The AP9X is also a normal downstream fixture on a Controller X chain:
+
+- Its `1C` reply reports GID at byte 5 and model type `0` at byte 6; callers add one, so the
+  AP9X is **type 1**, the same type as a Tuna Blue.
+- Its default GID is 1. Its five channels are intensity, color, violet, red and green.
+  Because the type matches, an AP9X can share a Tuna Blue group.
+- A `1F` group write with five channel values at bytes 5-9 is applied by an AP9X as a
+  downstream fixture; the selector byte does not change that.
+- A layout-0 `11` write with type `0` is accepted by an AP9X.
+- The AP9X additionally exposes left/right zone GIDs through commands `27`/`28`; that dual
+  path is separate from the five-channel single-group flow above.
+
+Limits: the exact bus exchange between an AP9X and a second controller, and where a fixture
+compares GID before applying a write, have not been captured.
 
 For two chained Tuna Suns in normal Kessil mode (`APEX_FLAG` clear), the firmware-derived individual-control sequence is: inspect cached records with `dtype:114` and confirm both known KIDs; if a KID is missing, try raw command-18 enumeration before considering JSON `dtype:0`; use `dtype:102` to confirm two existing groups with type 2 (or create unused GIDs 3–25 with `dtype:103`, `name`, and `type:2`); verify current K-Link GID/type with raw `1C` queries; assign KID A to GID A and KID B to GID B with separate `dtype:4` requests; then send independent `dtype:3` channel writes to each GID. JSON `dtype:0`, `dtype:1`, and `dtype:5` can move lamps when group types conflict. Read back group configuration with `dtype:102` and cached inventory with `dtype:114`. Do not reuse one GID for both fixtures if independent output is required, because command `1F` writes to every lamp in the destination group. Creating a group overwrites its configured name and type, so first verify the chosen GID is unused. This sequence follows the recovered Dongle 1.5.13 handlers and assumes the chain is discovered as reported; the exact two-fixture bus exchange and each lamp's physical response have not been captured.
 
